@@ -5,16 +5,23 @@ import (
 	"time"
 )
 
+const timeFormat = "2006-01-02T15:04:05"
+
 type jsonTime time.Time
 
 func (j *jsonTime) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
-	t, err := time.Parse("2006-01-02T15:04:05", s)
+	t, err := time.Parse(timeFormat, s)
 	if err != nil {
 		return err
 	}
 	*j = jsonTime(t)
 	return nil
+}
+
+func (j jsonTime) MarshalJSON() ([]byte, error) {
+	s := time.Time(j).Format(timeFormat)
+	return []byte(`"` + s + `"`), nil
 }
 
 func (j jsonTime) String() string {

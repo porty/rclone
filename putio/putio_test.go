@@ -1,7 +1,6 @@
 package putio
 
 import (
-	"errors"
 	"io"
 	"testing"
 
@@ -9,14 +8,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type ListerFunc func(dirID int) (*ListFilesResponse, error)
-
-func (f ListerFunc) List(dirID int) (*ListFilesResponse, error) {
-	return f(dirID)
+type FakeClient struct {
+	list        func(dirID int) (*ListFilesResponse, error)
+	get         func(fileID int) (io.ReadCloser, error)
+	getObjectID func(objPath string) (int, error)
 }
 
-func (f ListerFunc) Get(fileID int) (io.ReadCloser, int64, error) {
-	return nil, 0, errors.New("not implemented")
+func (c *FakeClient) List(dirID int) (*ListFilesResponse, error) {
+	if c.list == nil {
+		panic("list not implemented in FakeClient")
+	}
+	return c.list(dirID)
+}
+
+func (c *FakeClient) Get(fileID int) (io.ReadCloser, error) {
+	if c.get == nil {
+		panic("get not implemented in FakeClient")
+	}
+	return c.Get(fileID)
+}
+
+func (c *FakeClient) GetObjectID(objPath string) (int, error) {
+	if c.getObjectID == nil {
+		if objPath == "" || objPath == "/" {
+			return 0, nil
+		}
+		panic("getObjectID not implemented in FakeClient")
+	}
+	return c.getObjectID(objPath)
 }
 
 type StubListOpts struct {
@@ -40,7 +59,6 @@ func (s *StubListOpts) AddDir(dir *fs.Dir) bool {
 }
 
 func (s *StubListOpts) IncludeDirectory(remote string) bool {
-	// ???
 	return false
 }
 
@@ -70,12 +88,11 @@ func TestRootList(t *testing.T) {
 		panic(err)
 	}
 
-	clientRequests := 0
-
-	f.client = ListerFunc(func(dirID int) (*ListFilesResponse, error) {
-		clientRequests++
-		switch clientRequests {
-		case 1:
+	numRequests := 0
+	fakeClient := FakeClient{
+		list: func(dirID int) (*ListFilesResponse, error) {
+			numRequests++
+			require.Equal(t, 1, numRequests)
 			require.Equal(t, 0, dirID)
 			return &ListFilesResponse{
 				Status: "OK",
@@ -88,18 +105,15 @@ func TestRootList(t *testing.T) {
 					},
 				},
 			}, nil
-
-		default:
-			t.Fatalf("Wasn't expecting client.List to be called %d times", clientRequests)
-			return nil, errors.New("wat")
-		}
-
-	})
+		},
+	}
+	f.client = &fakeClient
 
 	out := StubListOpts{}
 
 	f.List(&out, "")
 
+	require.Equal(t, 1, numRequests)
 	require.Nil(t, out.err)
 	require.Empty(t, out.dirs)
 	require.Equal(t, 1, len(out.objects))
@@ -112,45 +126,19 @@ func TestSubdirList(t *testing.T) {
 		panic(err)
 	}
 
-	clientRequests := 0
+	numRequests := 0
 
-	f.client = ListerFunc(func(dirID int) (*ListFilesResponse, error) {
-		clientRequests++
-		switch clientRequests {
-		case 1:
-			require.Equal(t, 0, dirID)
-			return &ListFilesResponse{
-				Status: "OK",
-				Files: []FileObject{
-					FileObject{
-						ContentType: "text/plain",
-						ID:          1,
-						Name:        "readme.txt",
-						Size:        1024,
-					},
-					FileObject{
-						ContentType: "application/x-directory",
-						ID:          100,
-						Name:        "dir1",
-					},
-				},
-			}, nil
-
-		case 2:
-			require.Equal(t, 100, dirID)
-			return &ListFilesResponse{
-				Status: "OK",
-				Files: []FileObject{
-					FileObject{
-						ContentType: "application/x-directory",
-						ID:          200,
-						Name:        "dir2",
-					},
-				},
-			}, nil
-
-		case 3:
-			require.Equal(t, 200, dirID)
+	fakeClient := FakeClient{
+		getObjectID: func(obj string) (int, error) {
+			numRequests++
+			require.Equal(t, 1, numRequests)
+			require.Equal(t, "/dir1/dir2", obj)
+			return 123, nil
+		},
+		list: func(dirID int) (*ListFilesResponse, error) {
+			numRequests++
+			require.Equal(t, 2, numRequests)
+			require.Equal(t, 123, dirID)
 			return &ListFilesResponse{
 				Status: "OK",
 				Files: []FileObject{
@@ -162,19 +150,15 @@ func TestSubdirList(t *testing.T) {
 					},
 				},
 			}, nil
-
-		default:
-			t.Fatalf("Wasn't expecting client.List to be called %d times", clientRequests)
-			return nil, errors.New("wat")
-		}
-
-	})
+		},
+	}
+	f.client = &fakeClient
 
 	out := StubListOpts{}
 
 	f.List(&out, "dir2")
 
-	require.Equal(t, 3, clientRequests)
+	require.Equal(t, 2, numRequests)
 	require.Nil(t, out.err)
 	require.Empty(t, out.dirs)
 	require.Equal(t, 1, len(out.objects))
@@ -189,54 +173,22 @@ func TestNotFoundList(t *testing.T) {
 		panic(err)
 	}
 
-	clientRequests := 0
+	numRequests := 0
 
-	f.client = ListerFunc(func(dirID int) (*ListFilesResponse, error) {
-		clientRequests++
-		switch clientRequests {
-		case 1:
-			require.Equal(t, 0, dirID)
-			return &ListFilesResponse{
-				Status: "OK",
-				Files: []FileObject{
-					FileObject{
-						ContentType: "text/plain",
-						ID:          1,
-						Name:        "readme.txt",
-						Size:        1024,
-					},
-					FileObject{
-						ContentType: "application/x-directory",
-						ID:          100,
-						Name:        "dir1",
-					},
-				},
-			}, nil
-
-		case 2:
-			require.Equal(t, 100, dirID)
-			return &ListFilesResponse{
-				Status: "OK",
-				Files: []FileObject{
-					FileObject{
-						ContentType: "application/x-directory",
-						ID:          200,
-						Name:        "dir2",
-					},
-				},
-			}, nil
-
-		default:
-			t.Fatalf("Wasn't expecting client.List to be called %d times", clientRequests)
-			return nil, errors.New("wat")
-		}
-
-	})
+	fakeClient := FakeClient{
+		getObjectID: func(obj string) (int, error) {
+			numRequests++
+			require.Equal(t, 1, numRequests)
+			require.Equal(t, "/dir1/dirRofl", obj)
+			return 0, ErrNotFound
+		},
+	}
+	f.client = &fakeClient
 
 	out := StubListOpts{}
 
 	f.List(&out, "dirRofl")
 
-	require.Equal(t, 2, clientRequests)
+	require.Equal(t, 1, numRequests)
 	require.Equal(t, fs.ErrorObjectNotFound, out.err)
 }

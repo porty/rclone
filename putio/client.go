@@ -6,16 +6,32 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
+	"path"
+	"strings"
 )
 
 type client struct {
 	oauthToken string
+	client     Doer
+	idCache    map[string]int
+}
+
+type Doer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var ErrNotFound = errors.New("not found")
+
+func newClient(oauthToken string) *client {
+	return &client{
+		oauthToken: oauthToken,
+		client:     http.DefaultClient,
+		idCache:    map[string]int{"": 0},
+	}
 }
 
 func (c *client) List(dirID int) (*ListFilesResponse, error) {
-	log.Printf("I am listing dir with ID %d", dirID)
 	u := fmt.Sprintf("https://api.put.io/v2/files/list?parent_id=%d&oauth_token=%s", dirID, c.oauthToken)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
@@ -23,7 +39,7 @@ func (c *client) List(dirID int) (*ListFilesResponse, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -51,28 +67,69 @@ func (c *client) List(dirID int) (*ListFilesResponse, error) {
 }
 
 func (c *client) Get(fileID int) (io.ReadCloser, error) {
-	log.Printf("I am getting file with ID %d", fileID)
 	redirect, err := c.getRedirectURLForFile(fileID)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.Get(redirect)
+	req, _ := http.NewRequest(http.MethodGet, redirect, nil)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	return resp.Body, nil
 }
 
+func (c *client) GetObjectID(objPath string) (int, error) {
+	absPath := path.Clean(strings.Trim(objPath, "/"))
+	if absPath == "." {
+		absPath = ""
+	}
+
+	// "" is root
+	// "file.jpg" is file in root
+	// "dir1/dir2/file.jpg" is file in subdirs
+
+	if id, ok := c.idCache[absPath]; ok {
+		return id, nil
+	}
+
+	parts := strings.Split(absPath, "/")
+
+	for i := 0; i < len(parts); i++ {
+		parentDir := strings.Join(parts[:i], "/")
+		parentID, ok := c.idCache[parentDir]
+		if !ok {
+			return 0, ErrNotFound
+		}
+		resp, err := c.List(parentID)
+		if err != nil {
+			return 0, err
+		}
+		if resp.Status != "OK" {
+			return 0, errors.New("Error response from server: " + resp.Status)
+		}
+		for _, file := range resp.Files {
+			c.idCache[strings.Trim(parentDir+"/"+file.Name, "/")] = file.ID
+		}
+		if id, ok := c.idCache[absPath]; ok {
+			return id, nil
+		}
+	}
+
+	return 0, ErrNotFound
+}
+
 func (c *client) getRedirectURLForFile(fileID int) (string, error) {
 	u := fmt.Sprintf("https://api.put.io/v2/files/%d/download?oauth_token=%s", fileID, c.oauthToken)
-	resp, err := http.Get(u)
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusFound {
-		return "", fmt.Errorf("Unexpected status code from server: %d", resp.StatusCode)
+		return "", fmt.Errorf("Expected a redirect from server but received a %d instead", resp.StatusCode)
 	}
 	return resp.Header.Get("Location"), nil
 }
