@@ -146,7 +146,7 @@ type Client interface {
 
 // NewFs constructs an Fs from something
 func NewFs(name, root string) (fs.Fs, error) {
-	return newFs(name, root, fs.ConfigFile.MustValue(name, "putio_oauth"))
+	return newFs(name, root, fs.ConfigFileGet(name, "putio_oauth"))
 }
 
 func newFs(name string, root string, oauthToken string) (*Fs, error) {
