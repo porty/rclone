@@ -117,7 +117,7 @@ func TestRootList(t *testing.T) {
 	require.Nil(t, out.err)
 	require.Empty(t, out.dirs)
 	require.Equal(t, 1, len(out.objects))
-	require.Equal(t, "a file called readme.txt", out.objects[0].String())
+	require.Equal(t, "a file at readme.txt", out.objects[0].String())
 }
 
 func TestSubdirList(t *testing.T) {
@@ -162,7 +162,7 @@ func TestSubdirList(t *testing.T) {
 	require.Nil(t, out.err)
 	require.Empty(t, out.dirs)
 	require.Equal(t, 1, len(out.objects))
-	require.Equal(t, "a file called gorillas.txt", out.objects[0].String())
+	require.Equal(t, "a file at dir2/gorillas.txt", out.objects[0].String())
 	file := out.objects[0].(*File)
 	require.Equal(t, 201, file.id)
 }

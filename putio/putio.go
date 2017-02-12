@@ -97,7 +97,7 @@ func (f *Fs) List(out fs.ListOpts, dir string) {
 			}
 		} else {
 			if out.Add(&File{
-				name:      obj.Name,
+				remote:    path.Join(dir, obj.Name),
 				createdAt: time.Time(obj.CreatedAt),
 				size:      obj.Size,
 				id:        obj.ID,

@@ -9,7 +9,7 @@ import (
 )
 
 type File struct {
-	name      string
+	remote    string
 	createdAt time.Time
 	size      int64
 	id        int
@@ -18,12 +18,12 @@ type File struct {
 
 // String returns a description of the Object
 func (f *File) String() string {
-	return "a file called " + f.name
+	return "a file at " + f.remote
 }
 
 // Remote returns the remote path
 func (f *File) Remote() string {
-	return f.name
+	return f.remote
 }
 
 // ModTime returns the modification date of the file
