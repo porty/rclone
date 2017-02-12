@@ -9,12 +9,45 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 )
+
+type idCache struct {
+	m     sync.RWMutex
+	cache map[string]int
+}
+
+func newIDCache() *idCache {
+	return &idCache{
+		cache: map[string]int{},
+	}
+}
+
+func (c *idCache) get(path string) (int, bool) {
+	if path == "" {
+		return 0, true
+	}
+
+	c.m.RLock()
+	defer c.m.RUnlock()
+
+	id, ok := c.cache[path]
+
+	return id, ok
+}
+
+func (c *idCache) set(path string, id int) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.cache[path] = id
+}
 
 type client struct {
 	oauthToken string
 	client     Doer
-	idCache    map[string]int
+
+	idCache *idCache
 }
 
 type Doer interface {
@@ -27,7 +60,7 @@ func newClient(oauthToken string) *client {
 	return &client{
 		oauthToken: oauthToken,
 		client:     http.DefaultClient,
-		idCache:    map[string]int{"": 0},
+		idCache:    newIDCache(),
 	}
 }
 
@@ -89,7 +122,7 @@ func (c *client) GetObjectID(objPath string) (int, error) {
 	// "file.jpg" is file in root
 	// "dir1/dir2/file.jpg" is file in subdirs
 
-	if id, ok := c.idCache[absPath]; ok {
+	if id, ok := c.idCache.get(absPath); ok {
 		return id, nil
 	}
 
@@ -97,7 +130,7 @@ func (c *client) GetObjectID(objPath string) (int, error) {
 
 	for i := 0; i < len(parts); i++ {
 		parentDir := strings.Join(parts[:i], "/")
-		parentID, ok := c.idCache[parentDir]
+		parentID, ok := c.idCache.get(parentDir)
 		if !ok {
 			return 0, ErrNotFound
 		}
@@ -109,9 +142,9 @@ func (c *client) GetObjectID(objPath string) (int, error) {
 			return 0, errors.New("Error response from server: " + resp.Status)
 		}
 		for _, file := range resp.Files {
-			c.idCache[strings.Trim(parentDir+"/"+file.Name, "/")] = file.ID
+			c.idCache.set(strings.Trim(parentDir+"/"+file.Name, "/"), file.ID)
 		}
-		if id, ok := c.idCache[absPath]; ok {
+		if id, ok := c.idCache.get(absPath); ok {
 			return id, nil
 		}
 	}
