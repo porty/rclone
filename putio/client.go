@@ -100,12 +100,20 @@ func (c *client) List(dirID int) (*ListFilesResponse, error) {
 }
 
 func (c *client) Get(fileID int) (io.ReadCloser, error) {
-	redirect, err := c.getRedirectURLForFile(fileID)
+	u := fmt.Sprintf("https://api.put.io/v2/files/%d/download?oauth_token=%s", fileID, c.oauthToken)
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	req, _ := http.NewRequest(http.MethodGet, redirect, nil)
-	resp, err := c.client.Do(req)
+
+	if resp.StatusCode == http.StatusFound {
+		resp.Body.Close()
+		redirect := resp.Header.Get("Location")
+		req, _ := http.NewRequest(http.MethodGet, redirect, nil)
+		resp, err = c.client.Do(req)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -150,19 +158,4 @@ func (c *client) GetObjectID(objPath string) (int, error) {
 	}
 
 	return 0, ErrNotFound
-}
-
-func (c *client) getRedirectURLForFile(fileID int) (string, error) {
-	u := fmt.Sprintf("https://api.put.io/v2/files/%d/download?oauth_token=%s", fileID, c.oauthToken)
-	req, _ := http.NewRequest(http.MethodGet, u, nil)
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusFound {
-		return "", fmt.Errorf("Expected a redirect from server but received a %d instead", resp.StatusCode)
-	}
-	return resp.Header.Get("Location"), nil
 }
