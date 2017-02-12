@@ -52,6 +52,16 @@ func (f *Fs) Hashes() fs.HashSet {
 	return fs.NewHashSet(fs.HashNone)
 }
 
+// Features returns the optional features of this Fs
+func (f *Fs) Features() *fs.Features {
+	return &fs.Features{
+		CaseInsensitive: true,
+		DuplicateFiles:  false,
+		ReadMimeType:    true,
+		WriteMimeType:   false,
+	}
+}
+
 // List the objects and directories of the Fs starting from dir
 //
 // dir should be "" to start from the root, and should not
