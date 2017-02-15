@@ -50,7 +50,7 @@ func (f *File) Hash(fs.HashType) (string, error) {
 
 // Storable says whether this object can be stored
 func (f *File) Storable() bool {
-	return false
+	return true
 }
 
 // SetModTime sets the metadata on the object to set the modification date
