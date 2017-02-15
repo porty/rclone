@@ -65,16 +65,18 @@ var hashTestSet = []hashTest{
 	{
 		input: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
 		output: map[fs.HashType]string{
-			fs.HashMD5:  "bf13fc19e5151ac57d4252e0e0f87abe",
-			fs.HashSHA1: "3ab6543c08a75f292a5ecedac87ec41642d12166",
+			fs.HashMD5:   "bf13fc19e5151ac57d4252e0e0f87abe",
+			fs.HashSHA1:  "3ab6543c08a75f292a5ecedac87ec41642d12166",
+			fs.HashCRC32: "a6041d7e",
 		},
 	},
 	// Empty data set
 	{
 		input: []byte{},
 		output: map[fs.HashType]string{
-			fs.HashMD5:  "d41d8cd98f00b204e9800998ecf8427e",
-			fs.HashSHA1: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+			fs.HashMD5:   "d41d8cd98f00b204e9800998ecf8427e",
+			fs.HashSHA1:  "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+			fs.HashCRC32: "00000000",
 		},
 	},
 }

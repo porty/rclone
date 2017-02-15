@@ -13,6 +13,7 @@ type File struct {
 	createdAt time.Time
 	size      int64
 	id        int
+	crc32     string
 	fs        *Fs
 }
 
@@ -44,8 +45,11 @@ func (f *File) Fs() fs.Info {
 
 // Hash returns the selected checksum of the file
 // If no checksum is available it returns ""
-func (f *File) Hash(fs.HashType) (string, error) {
-	return "", errors.New("No hashing is available")
+func (f *File) Hash(t fs.HashType) (string, error) {
+	if t != fs.HashCRC32 {
+		return "", fs.ErrHashUnsupported
+	}
+	return f.crc32, nil
 }
 
 // Storable says whether this object can be stored

@@ -49,7 +49,7 @@ func (f *Fs) Precision() time.Duration {
 
 // Returns the supported hash types of the filesystem
 func (f *Fs) Hashes() fs.HashSet {
-	return fs.NewHashSet(fs.HashNone)
+	return fs.HashSet(fs.HashCRC32)
 }
 
 // Features returns the optional features of this Fs
@@ -111,6 +111,7 @@ func (f *Fs) List(out fs.ListOpts, dir string) {
 				createdAt: time.Time(obj.CreatedAt),
 				size:      obj.Size,
 				id:        obj.ID,
+				crc32:     obj.Crc32,
 				fs:        f,
 			}) {
 				break
